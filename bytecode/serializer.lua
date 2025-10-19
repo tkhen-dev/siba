@@ -12,40 +12,27 @@ local flags = {
     userdata = "110",
     double = "111"
 }
-local a,b,c,bx,sbx = "a","b","c","bx","sbx"
+
+local a, b, c, bx, sbx = "a", "b", "c", "bx", "sbx"
 
 local opcode_mappings = {
-    iABC = {0,2,3,4,6,8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,24,25,26,27,28,29,30,33,34,35,37},
-    iABx = {1,5,7,36},
-    iAsBx = {22,31,32}
+    iABC = {[0]=true,[2]=true,[3]=true,[4]=true,[6]=true,[8]=true,[9]=true,[10]=true,[11]=true,[12]=true,[13]=true,[14]=true,[15]=true,[16]=true,[17]=true,[18]=true,[19]=true,[20]=true,[21]=true,[23]=true,[24]=true,[25]=true,[26]=true,[27]=true,[28]=true,[29]=true,[30]=true,[33]=true,[34]=true,[35]=true,[37]=true},
+    iABx = {[1]=true,[5]=true,[7]=true,[36]=true},
+    iAsBx = {[22]=true,[31]=true,[32]=true}
 }
 
-local function find(tbl,value)
-    for i,v in pairs(tbl) do
-        if v == value then return i end
-    end
-end
-
-local function leftpad(str,count,char)
-    local char = char or "0"
-
-    str = char:rep(count-#str) .. str
-    return str
+local function leftpad(str, count, char)
+    char = char or "0"
+    return char:rep(math.max(0, count - #str)) .. str
 end
 
 local function to_bits(num)
+    if num == 0 then return "" end
     local bit_rep = ""
-        
     while num > 0 do
-        if num % 2 == 0 then
-            bit_rep = "0" .. bit_rep
-        else
-            bit_rep = "1" .. bit_rep
-        end
-
+        bit_rep = (num % 2) .. bit_rep
         num = bit.rshift(num, 1)
     end
-
     return bit_rep
 end
 
@@ -55,59 +42,48 @@ function serializer.spread_chunk(chunk)
     table.insert(sorted_chunk, chunk.upvalue_count)
     table.insert(sorted_chunk, chunk.instr_offset)
 
-    for i,upvalue in pairs(chunk.upvalues) do
+    for _, upvalue in pairs(chunk.upvalues) do
         table.insert(sorted_chunk, upvalue)
     end
-
-    -- from now on these can be shuffled
 
     local total_count = #chunk.instructions + #chunk.constants + #chunk.protos
 
     while total_count > 0 do
-        local ubound = 3
-        local proto = 0
         local valids = {}
+        local proto_idx = 0
 
-        if #chunk.instructions == 0 then ubound = ubound - 1 else table.insert(valids,chunk.instructions) end
-        if #chunk.constants == 0 then ubound = ubound - 1 else table.insert(valids,chunk.constants) end
-        if #chunk.protos == 0 then ubound = ubound - 1 else
-            table.insert(valids,chunk.protos)
-            proto = #valids
+        if #chunk.instructions > 0 then
+            table.insert(valids, chunk.instructions)
+        end
+        if #chunk.constants > 0 then
+            table.insert(valids, chunk.constants)
+        end
+        if #chunk.protos > 0 then
+            table.insert(valids, chunk.protos)
+            proto_idx = #valids
         end
 
-        local selection = math.random(1,ubound)
+        if #valids == 0 then break end
 
-        if selection == 1 then
-            local item = table.remove(valids[1],1)
-            if proto == selection then
-                item = serializer.spread_chunk(item)
-            end
-            table.insert(sorted_chunk,item)
-        elseif selection == 2 then
-            local item = table.remove(valids[2],1)
-            if proto == selection then
-                item = serializer.spread_chunk(item)
-            end
-            table.insert(sorted_chunk,item)
-        elseif selection == 3 then
-            local item = table.remove(valids[3],1)
-            if proto == selection then
-                item = serializer.spread_chunk(item)
-            end
-            table.insert(sorted_chunk,item)
+        local selection = math.random(1, #valids)
+        local item = table.remove(valids[selection], 1)
+
+        if selection == proto_idx then
+            item = serializer.spread_chunk(item)
         end
 
+        table.insert(sorted_chunk, item)
         total_count = total_count - 1
     end
-    
+
     return sorted_chunk
 end
 
 function serializer.chunk(sorted_chunk, top_level)
-    if top_level == nil then top_level = true end
+    top_level = top_level ~= false
 
     local pointer = 1
-    local bytecode = (not top_level) and "" or flags.proto
+    local bytecode = top_level and flags.proto or ""
 
     local upvalue_count = sorted_chunk[pointer]
     bytecode = bytecode .. serializer.constant(upvalue_count)
@@ -116,7 +92,7 @@ function serializer.chunk(sorted_chunk, top_level)
     local instr_offset = sorted_chunk[pointer]
     bytecode = bytecode .. serializer.constant(instr_offset)
 
-    for i=1,upvalue_count do
+    for i = 1, upvalue_count do
         pointer = pointer + 1
         bytecode = bytecode .. serializer.upvalue(sorted_chunk[pointer])
     end
@@ -143,9 +119,6 @@ function serializer.chunk(sorted_chunk, top_level)
     return bytecode
 end
 
-function serializer.format()
-end
-
 function serializer.constant(const)
     local typ = type(const)
     local bytecode = flags[typ]
@@ -153,19 +126,22 @@ function serializer.constant(const)
     if typ == "boolean" then
         bytecode = bytecode .. (const and "1" or "0")
     elseif typ == "number" then
-        if tostring(const) == "1.1125369292536e-308" then const = 0 end
-        
+        if const == 0 or tostring(const) == "1.1125369292536e-308" then
+            const = 0
+        end
+
         local str_num = tostring(const)
-        local result = str_num:find("%.")
-        if result then
-            bytecode = flags["double"]
-            local int,dec = str_num:sub(1,result-1), str_num:sub(result+1,-1)
+        local dot_pos = str_num:find("%.")
+
+        if dot_pos then
+            bytecode = flags.double
+            local int = str_num:sub(1, dot_pos - 1)
+            local dec = str_num:sub(dot_pos + 1)
             bytecode = bytecode .. serializer.constant(tonumber(int)) .. serializer.constant(tonumber(dec))
         else
             if const > 2147483647 then
                 logging.error("serializing number > 32 bits")
             end
-
             bytecode = bytecode .. leftpad(to_bits(const), 32)
         end
     elseif typ == "string" then
@@ -174,32 +150,25 @@ function serializer.constant(const)
         for c in const:gmatch(".") do
             bytecode = bytecode .. leftpad(to_bits(c:byte()), 8)
         end
-    elseif typ == "userdata" then
-        -- nothing
     end
 
     return bytecode
 end
 
-function serializer.instruction(instr) --[[the instructions will be parsed
-                                        with a b c bx and sbx, the instruction 
-                                        chosen will just determine what it will
-                                        be]]
-    -- organise it as abc
+function serializer.instruction(instr)
     local bytecode = flags.instruction
     bytecode = bytecode .. leftpad(to_bits(instr[a]), 8)
 
-    if find(opcode_mappings.iABC,instr.opcode) then
+    if opcode_mappings.iABC[instr.opcode] then
         bytecode = bytecode .. leftpad(to_bits(instr[b]), 9) .. leftpad(to_bits(instr[c]), 9)
-    elseif find(opcode_mappings.iABx,instr.opcode) then
+    elseif opcode_mappings.iABx[instr.opcode] then
         bytecode = bytecode .. leftpad(to_bits(instr[bx]), 18)
-    elseif find(opcode_mappings.iAsBx,instr.opcode) then
+    elseif opcode_mappings.iAsBx[instr.opcode] then
         local val = instr[sbx]
-
         if val > 0 then
-            bytecode = bytecode .. "0" .. leftpad(to_bits(instr[sbx]), 17)
+            bytecode = bytecode .. "0" .. leftpad(to_bits(val), 17)
         else
-            bytecode = bytecode .. "1" .. leftpad(to_bits(math.abs(instr[sbx])), 17)
+            bytecode = bytecode .. "1" .. leftpad(to_bits(math.abs(val)), 17)
         end
     end
 
