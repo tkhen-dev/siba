@@ -1,44 +1,36 @@
 local rk_instrs = {
-    rkc = {6,11},
-    rkbc = {9,12,13,14,15,16,17,23,24,25}
+    rkc = {[6] = true, [11] = true},
+    rkbc = {[9] = true, [12] = true, [13] = true, [14] = true, [15] = true, [16] = true, [17] = true, [23] = true, [24] = true, [25] = true}
 }
 
-local kst_instrs = {1,5,7}
-local upvalue_instrs = {4,8}
-
-local function find(t,val)
-    for i,v in pairs(t) do
-        if v == val then
-            return i
-        end
-    end
-end
+local kst_instrs = {[1] = true, [5] = true, [7] = true}
+local upvalue_instrs = {[4] = true, [8] = true}
 
 local function handle_kst(instr)
-    if find(kst_instrs, instr["opcode"]) then
-        instr["bx"] = instr["bx"] + 1
+    if kst_instrs[instr.opcode] then
+        instr.bx = instr.bx + 1
     end
 end
 
 local function handle_upvalue(instr)
-    if find(upvalue_instrs, instr["opcode"]) then
-        instr["b"] = instr["b"] + 1
+    if upvalue_instrs[instr.opcode] then
+        instr.b = instr.b + 1
     end
 end
 
 local function handle_rk(instr, only_rk)
-    if find(rk_instrs.rkc, instr["opcode"]) then
-        -- goofy ass control flow
-    elseif find(rk_instrs.rkbc, instr["opcode"]) or only_rk then
+    if rk_instrs.rkc[instr.opcode] then
+        -- handle rkc
+    elseif rk_instrs.rkbc[instr.opcode] or only_rk then
         if instr.b > 255 then
-            instr.kb = instr.b - 255 -- not -256, +1 from that to correct the lua 1-indexed tables
+            instr.kb = instr.b - 255
         end
     else
         return
     end
 
     if instr.c > 255 then
-        instr.kc = instr.c - 255 -- same here
+        instr.kc = instr.c - 255
     end
 end
 
@@ -51,8 +43,8 @@ end
 local function rectify_instructions(chunk, only_rk)
     local instrs = chunk.instructions
 
-    for i,instr in pairs(instrs) do
-        handle_rk(instr, only_rk) --all rk has been created, and then every k index is 
+    for _, instr in pairs(instrs) do
+        handle_rk(instr, only_rk)
         if not only_rk then
             handle_kst(instr)
             handle_upvalue(instr)
@@ -65,7 +57,7 @@ local function rectify(chunk, only_rk)
     only_rk = only_rk or false
     rectify_instructions(chunk, only_rk)
 
-    for i,proto in pairs(chunk.protos) do
+    for _, proto in pairs(chunk.protos) do
         rectify(proto, only_rk)
     end
 end
