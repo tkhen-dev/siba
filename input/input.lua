@@ -1,7 +1,5 @@
-local a,b = "roblox"
-
-if game ~= b then
-    print(a)
-else
-    print("not roblox")
+local function chao(ten)
+	print("Xin chào, " .. ten .. "!")
 end
+
+chao("Roblox")
