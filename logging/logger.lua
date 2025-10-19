@@ -20,12 +20,19 @@ local log_levels = {
     error = 4
 }
 
+local log_functions = {
+    info = {level = 1, colour = "green"},
+    debug = {level = 2, colour = "blue"},
+    warning = {level = 3, colour = "yellow"},
+    error = {level = 4, colour = "red"}
+}
+
 local function colourise(message, colour)
-    return string.format("\27[%sm%s",colours[colour],message)
+    return string.format("\27[%sm%s", colours[colour], message)
 end
 
 local function reset()
-    return io.write(colourise("","reset"))
+    return io.write(colourise("", "reset"))
 end
 
 local function get_log_level()
@@ -36,44 +43,30 @@ local function set_log_level(level)
     log_level = level
 end
 
-local function info(msg)
-    local name = "info"
-
+local function log(name, msg, colour)
     if log_level > log_levels[name] then return end
 
-    print(colourise(string.format(message, os.date("%F %T"), name:upper(), msg), "green"))
+    print(colourise(string.format(message, os.date("%F %T"), name:upper(), msg), colour))
 
-    if auto_reset then return reset() end
+    if auto_reset then
+        reset()
+    end
+end
+
+local function info(msg)
+    log("info", msg, "green")
 end
 
 local function debug(msg)
-    local name = "debug"
-
-    if log_level > log_levels[name] then return end
-
-    print(colourise(string.format(message, os.date("%F %T"), name:upper(), msg), "blue"))
-
-    if auto_reset then return reset() end
+    log("debug", msg, "blue")
 end
 
 local function warning(msg)
-    local name = "warning"
-
-    if log_level > log_levels[name] then return end
-
-    print(colourise(string.format(message, os.date("%F %T"), name:upper(), msg), "yellow"))
-
-    if auto_reset then return reset() end
+    log("warning", msg, "yellow")
 end
 
 local function error(msg)
-    local name = "error"
-
-    if log_level > log_levels[name] then return end
-
-    print(colourise(string.format(message, os.date("%F %T"), name:upper(), msg), "red"))
-
-    if auto_reset then return reset() end
+    log("error", msg, "red")
 end
 
 return {
