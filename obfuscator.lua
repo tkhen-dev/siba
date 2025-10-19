@@ -16,12 +16,8 @@ local logging = require("./logging/logger.lua")
 
 local debug = true
 
-local watermark = [=[--[[
-    IronBrew:tm: obfuscation; Version 2.7.0
-]]
-
-local FusGato = "discord.gg/cWQAy6Z697";
-
+local watermark = [=[
+--// DEV-OBFUSCATER
 ]=]
 
 local function verify(old_chunk, new_chunk)
